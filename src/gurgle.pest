@@ -4,11 +4,11 @@ number = @{ ASCII_DIGIT+ }
 postprocess = { "avg" | "max" | "min" | "sum" }
 dice = { number ~ ( "d" | "D" ) ~ number ~ postprocess? }
 
-compare = { ">" | "<" | ">=" | "<=" | "=" | "==" }
+compare = { ">=" | "<=" | ">" | "<" | "==" | "=" }
 checker = { compare ~ number }
 
 operator = { "+" | "-" }
 item = { dice | number }
 
 expr = { item ~ ( operator ~ item )* }
-gurgle = { SOI ~ expr ~ checker? ~ EOI }
+gurgle = _{ SOI ~ expr ~ checker? ~ EOI }

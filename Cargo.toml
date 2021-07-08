@@ -1,9 +1,16 @@
 [package]
 name = "gurgle"
 version = "0.1.0"
+authors = ["7sDream <i@7sdre.am>"]
 edition = "2018"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+description = "Yet another dice rolling crate"
+documentation = "https://docs.rs/gurgle"
+readme = "README.md"
+homepage = "https://github.com/7sDream/gurgle"
+repository = "https://github.com/7sDream/gurgle"
+license = "BSD-3-Clause-Clear"
+keywords = ["dice", "roll", "trpg", "random"]
+categories = ["game-development", "game", "parser-implementations", "simulation"]
 
 [dependencies]
 pest = "2.0"

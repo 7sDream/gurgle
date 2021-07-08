@@ -1,230 +1,71 @@
-use std::{cmp::Ordering, fmt::format, num::ParseIntError, str::FromStr};
+//! Roll dice using TRPG-like syntax.
 
-#[macro_use]
-extern crate pest_derive;
-use pest::{iterators::Pair, Parser, RuleType};
+// ===== lint config =====
 
-use thiserror::Error;
+#![deny(clippy::all, clippy::pedantic, clippy::nursery)]
+#![deny(missing_debug_implementations, rust_2018_idioms)]
+#![deny(missing_docs)]
+#![deny(warnings)]
+#![allow(
+    clippy::module_name_repetitions,
+    clippy::cast_possible_truncation,
+    clippy::non_ascii_literal
+)]
 
-mod error;
+// ===== mods =====
 
-pub use error::ParseEnumError;
+pub mod ast;
+pub mod checker;
+mod config;
+pub mod error;
+mod parser;
 
-#[derive(Parser)]
-#[grammar = "gurgle.pest"] // relative to src
-struct GurgleParser {}
+// ===== uses =====
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-enum PostProcessor {
-    Sum,
-    Avg,
-    Max,
-    Min,
-}
+use pest::Parser;
 
-impl FromStr for PostProcessor {
-    type Err = ParseEnumError;
+use crate::{
+    ast::TreeNode,
+    checker::Checker,
+    error::GurgleError,
+    parser::{GurgleParser, Rule},
+};
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let res = match s.to_ascii_lowercase().as_str() {
-            "sum" => Self::Sum,
-            "avg" => Self::Avg,
-            "max" => Self::Max,
-            "min" => Self::Min,
-            _ => return Err(ParseEnumError),
-        };
+// ===== pub uses =====
 
-        Ok(res)
-    }
-}
+pub use config::Config;
 
+// ===== implement =====
+
+/// Parsed struct of a gurgle syntax command
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-struct Dice {
-    times: u64,
-    faces: u64,
-    pp: PostProcessor,
-}
-
-impl Dice {
-    fn from_pair(pair: Pair<Rule>) -> Result<Self, GurgleError> {
-        assert_eq!(pair.as_rule(), Rule::dice);
-
-        let mut pairs = pair.into_inner();
-        let times = pairs.next().unwrap().as_str().parse()?;
-        let faces = pairs.next().unwrap().as_str().parse()?;
-        let pp = pairs
-            .next()
-            .map_or(PostProcessor::Sum, |s| s.as_str().parse().unwrap());
-
-        Ok(Self { times, faces, pp })
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-enum Item {
-    Number(u64),
-    Dice(Dice),
-}
-
-impl Item {
-    fn from_pair(pair: Pair<Rule>) -> Result<Self, GurgleError> {
-        assert_eq!(pair.as_rule(), Rule::item);
-
-        let expr = pair.into_inner().next().unwrap();
-
-        let result = match expr.as_rule() {
-            Rule::number => Self::Number(expr.as_str().parse::<u64>()?),
-            Rule::dice => Self::Dice(Dice::from_pair(expr)?),
-            _ => unreachable!(),
-        };
-
-        Ok(result)
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-enum Operator {
-    Add,
-    Minus,
-}
-
-impl FromStr for Operator {
-    type Err = ParseEnumError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let op = match s {
-            "+" => Self::Add,
-            "-" => Self::Minus,
-            _ => return Err(ParseEnumError),
-        };
-
-        return Ok(op);
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-struct Expr {
-    left: Box<ExprNode>,
-    op: Operator,
-    right: Box<ExprNode>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-enum ExprNode {
-    Item(Item),
-    Expr(Expr),
-}
-
-impl ExprNode {
-    fn from_pair(pair: Pair<Rule>) -> Result<Self, GurgleError> {
-        let mut expr: Option<ExprNode> = None;
-        let mut op = None;
-
-        for pair in pair.into_inner() {
-            match pair.as_rule() {
-                Rule::item => {
-                    let item = Item::from_pair(pair)?;
-                    if expr.is_none() {
-                        expr.replace(ExprNode::Item(item));
-                    } else {
-                        let e = expr.take().unwrap();
-                        expr.replace(ExprNode::Expr(Expr {
-                            left: Box::new(e),
-                            op: op.take().unwrap(),
-                            right: Box::new(ExprNode::Item(item)),
-                        }));
-                    }
-                }
-                Rule::operator => {
-                    op.replace(Operator::from_str(pair.as_str()).unwrap());
-                }
-                _ => {}
-            }
-        }
-
-        Ok(expr.unwrap())
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-enum Compare {
-    Gte,
-    Gt,
-    Lte,
-    Lt,
-    Eq,
-}
-
-impl FromStr for Compare {
-    type Err = ParseEnumError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let cmp = match s {
-            ">=" => Self::Gte,
-            ">" => Self::Gt,
-            "<=" => Self::Lte,
-            "<" => Self::Lt,
-            "=" | "==" => Self::Eq,
-            _ => return Err(ParseEnumError),
-        };
-
-        return Ok(cmp);
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-struct Checker {
-    compare: Compare,
-    target: u64,
-}
-
-impl Checker {
-    fn from_pair(pair: Pair<Rule>) -> Result<Self, GurgleError> {
-        assert_eq!(pair.as_rule(), Rule::checker);
-
-        let mut pairs = pair.into_inner();
-        let compare = pairs.next().unwrap().as_str().parse().unwrap();
-        let target = pairs.next().unwrap().as_str().parse()?;
-
-        Ok(Self { compare, target })
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-struct Gurgle {
-    expr: ExprNode,
-    checker: Option<Checker>,
-}
-
-#[derive(Debug, Error)]
-enum GurgleError {
-    #[error("invalid gurgle command: {0}")]
-    ParseError(String),
-    #[error("command contains invalid number")]
-    ParseNumberError(#[from] ParseIntError),
-    #[error("dice roll times reach limit")]
-    ReachMaxRollTimes,
-    #[error("dice count reach limit")]
-    ReachMaxDiceCount,
-}
-
-impl<R: RuleType> From<pest::error::Error<R>> for GurgleError {
-    fn from(err: pest::error::Error<R>) -> Self {
-        Self::ParseError(format!("{}", err))
-    }
+pub struct Gurgle {
+    /// The root node of gurgle expr ast tree
+    pub expr: TreeNode,
+    /// The checker to check if an execution result is a success
+    pub checker: Option<Checker>,
 }
 
 impl Gurgle {
-    pub fn new(s: &str) -> Result<Self, GurgleError> {
-        let mut pairs = GurgleParser::parse(Rule::gurgle, s)?;
+    /// Compile `s` into a the inner structure for executing, with a custom limits configuration.
+    ///
+    /// ## Errors
+    ///
+    /// When parse failed(not valid gurgle syntax) or exceeded the limit defined in `config`.
+    ///
+    /// ## Panics
+    ///
+    /// Only when internal logic error, please report issue if happened.
+    pub fn compile_with_config(s: &str, config: &Config) -> Result<Self, GurgleError> {
+        let pairs = GurgleParser::parse(Rule::gurgle, s)?;
 
         let mut expr = None;
         let mut checker = None;
 
-        for pair in pairs.next().unwrap().into_inner() {
+        for pair in pairs {
             match pair.as_rule() {
                 Rule::expr => {
-                    expr.replace(ExprNode::from_pair(pair)?);
+                    expr.replace(TreeNode::from_pair(pair, config)?);
                 }
                 Rule::checker => {
                     checker.replace(Checker::from_pair(pair)?);
@@ -239,29 +80,81 @@ impl Gurgle {
             checker,
         })
     }
+
+    /// Compile a string to gurgle expr, using [default config].
+    ///
+    /// ## Errors
+    ///
+    /// See [`compile_with_config`].
+    ///
+    /// [default config]: struct.config.html#method.default
+    /// [`compile_with_config`]: #method.compile_with_config
+    pub fn compile(s: &str) -> Result<Self, GurgleError> {
+        Self::compile_with_config(s, &config::DEFAULT_CONFIG)
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use pest::Parser;
 
     #[test]
     fn test_parser_correct() {
-        assert!(GurgleParser::parse(Rule::gurgle, "1d6+1").is_ok());
-        assert!(GurgleParser::parse(Rule::gurgle, "3d6+2d10+1").is_ok());
-        assert!(GurgleParser::parse(Rule::gurgle, "3d6max+2d10min+1").is_ok());
-
-        let gurgle = Gurgle::new("3d6max+2d10min+1").unwrap();
-        println!("{:?}", gurgle)
+        assert!(Gurgle::compile("1d6+1").is_ok());
+        assert!(Gurgle::compile("3d6+2d10+1").is_ok());
+        assert!(Gurgle::compile("3d6max+2d10min+1").is_ok());
+        assert!(Gurgle::compile("3d6max+2d10min+1>=10").is_ok());
+        assert!(Gurgle::compile("100d1000+1").is_ok());
     }
 
     #[test]
     fn test_parser_invalid() {
-        assert!(GurgleParser::parse(Rule::gurgle, "+").is_err());
-        assert!(GurgleParser::parse(Rule::gurgle, "good").is_err());
-        assert!(GurgleParser::parse(Rule::gurgle, "1d6x1").is_err());
-        assert!(GurgleParser::parse(Rule::gurgle, "3d6+2p10+1").is_err());
-        assert!(GurgleParser::parse(Rule::gurgle, "3d6max+2d10min+1avg").is_err())
+        assert!(std::matches!(
+            Gurgle::compile("+").unwrap_err(),
+            GurgleError::InvalidSyntax(_)
+        ));
+        assert!(std::matches!(
+            Gurgle::compile("good").unwrap_err(),
+            GurgleError::InvalidSyntax(_)
+        ));
+        assert!(std::matches!(
+            Gurgle::compile("1d6x1").unwrap_err(),
+            GurgleError::InvalidSyntax(_)
+        ));
+        assert!(std::matches!(
+            Gurgle::compile("3d6+2p10+1").unwrap_err(),
+            GurgleError::InvalidSyntax(_)
+        ));
+        assert!(std::matches!(
+            Gurgle::compile("3d6max+2d10min+1avg").unwrap_err(),
+            GurgleError::InvalidSyntax(_)
+        ));
+    }
+
+    #[test]
+    fn test_compile_error() {
+        assert_eq!(
+            Gurgle::compile(
+                "3d6+3d6+3d6+3d6+3d6+3d6+3d6+3d6+3d6+3d6+3d6+3d6+3d6+3d6+3d6+3d6+3d6+3d6+3d6+3d6+1"
+            )
+            .unwrap_err(),
+            GurgleError::ItemCountLimitExceeded,
+        );
+        assert_eq!(
+            Gurgle::compile("10d1001").unwrap_err(),
+            GurgleError::DiceSidesCountLimitExceeded,
+        );
+        assert_eq!(
+            Gurgle::compile("1001d10").unwrap_err(),
+            GurgleError::DiceRollTimesLimitExceeded,
+        );
+        assert_eq!(
+            Gurgle::compile("1000d10+1d10").unwrap_err(),
+            GurgleError::DiceRollTimesLimitExceeded,
+        );
+        assert_eq!(
+            Gurgle::compile("65537").unwrap_err(),
+            GurgleError::NumberItemTooLarge,
+        );
     }
 }
