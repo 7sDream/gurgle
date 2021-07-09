@@ -5,6 +5,7 @@ use std::str::FromStr;
 use pest::iterators::Pair;
 
 use crate::{
+    config::Config,
     error::{GurgleError, ParseEnumError},
     parser::Rule,
 };
@@ -60,16 +61,20 @@ pub struct Checker {
     /// wanted compare result
     pub compare: Compare,
     /// target value
-    pub target: u64,
+    pub target: i64,
 }
 
 impl Checker {
-    pub(crate) fn from_pair(pair: Pair<'_, Rule>) -> Result<Self, GurgleError> {
+    pub(crate) fn from_pair(pair: Pair<'_, Rule>, config: &Config) -> Result<Self, GurgleError> {
         assert_eq!(pair.as_rule(), Rule::checker);
 
         let mut pairs = pair.into_inner();
         let compare = pairs.next().unwrap().as_str().parse().unwrap();
-        let target = pairs.next().unwrap().as_str().parse()?;
+        let target = pairs.next().unwrap().as_str().parse::<i64>()?;
+
+        if target.abs() as u64 > config.max_number_item_value {
+            return Err(GurgleError::NumberItemOutOfRange);
+        }
 
         Ok(Self { compare, target })
     }

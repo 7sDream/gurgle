@@ -52,7 +52,7 @@ pub struct Dice {
     /// roll dice how many times
     pub times: u64,
     /// side count of this dice
-    pub sides: u64,
+    pub sided: u64,
     /// post process action after all roll, see [`PostProcessor`]
     ///
     /// [`PostProcessor`]: enum.PostProcessor.html
@@ -60,23 +60,31 @@ pub struct Dice {
 }
 
 impl Dice {
+    #[allow(clippy::cast_sign_loss)] // because times and sided can't be negative
     fn from_pair(pair: Pair<'_, Rule>, config: &Config) -> Result<Self, GurgleError> {
         assert_eq!(pair.as_rule(), Rule::dice);
 
         let mut pairs = pair.into_inner();
-        let times = pairs.next().unwrap().as_str().parse()?;
-        let sides = pairs.next().unwrap().as_str().parse()?;
-        if times > config.max_roll_times {
+        let times = pairs.next().unwrap().as_str().parse::<i64>()?;
+        let sided = pairs.next().unwrap().as_str().parse::<i64>()?;
+        if times <= 0 || sided <= 0 {
+            return Err(GurgleError::DiceRollOrSidedNegative);
+        }
+        if times as u64 > config.max_roll_times {
             return Err(GurgleError::DiceRollTimesLimitExceeded);
         }
-        if sides > config.max_dice_sides {
-            return Err(GurgleError::DiceSidesCountLimitExceeded);
+        if sided as u64 > config.max_dice_sides {
+            return Err(GurgleError::DiceSidedCountLimitExceeded);
         }
         let pp = pairs
             .next()
             .map_or(PostProcessor::Sum, |s| s.as_str().parse().unwrap());
 
-        Ok(Self { times, sides, pp })
+        Ok(Self {
+            times: times as u64,
+            sided: sided as u64,
+            pp,
+        })
     }
 }
 
@@ -84,7 +92,7 @@ impl Dice {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Item {
     /// A normal number
-    Number(u64),
+    Number(i64),
     /// A dice
     Dice(Dice),
 }
@@ -96,10 +104,11 @@ impl Item {
         let expr = pair.into_inner().next().unwrap();
 
         let result = match expr.as_rule() {
+            #[allow(clippy::cast_sign_loss)] // because x is >= 0 after check
             Rule::number => {
-                let x = expr.as_str().parse::<u64>()?;
-                if x > config.max_number_item_value {
-                    return Err(GurgleError::NumberItemTooLarge);
+                let x = expr.as_str().parse::<i64>()?;
+                if x.abs() as u64 > config.max_number_item_value {
+                    return Err(GurgleError::NumberItemOutOfRange);
                 }
                 Self::Number(x)
             }

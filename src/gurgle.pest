@@ -1,6 +1,6 @@
 WHITE_SPACE = _{ " " | "\t" }
 
-number = @{ ASCII_DIGIT+ }
+number = @{ "-"? ~ ASCII_DIGIT+ }
 postprocess = { "avg" | "max" | "min" | "sum" }
 dice = { number ~ ( "d" | "D" ) ~ number ~ postprocess? }
 
