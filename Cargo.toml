@@ -16,3 +16,8 @@ categories = ["game-development", "game", "parser-implementations", "simulation"
 pest = "2.0"
 pest_derive = "2.0"
 thiserror = "1"
+
+[dependencies.nanorand]
+version = "0.6"
+default_features = false
+features = ["std", "tls", "wyrand"]

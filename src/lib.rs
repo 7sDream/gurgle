@@ -22,6 +22,7 @@ mod parser;
 
 // ===== uses =====
 
+use nanorand::Rng;
 use pest::Parser;
 
 use crate::{
@@ -36,6 +37,27 @@ use crate::{
 pub use config::Config;
 
 // ===== implement =====
+
+/// Rolling result
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct RollResult<'g> {
+    result: i64,
+    checker: Option<&'g Checker>,
+}
+
+impl<'g> RollResult<'g> {
+    /// Get result
+    #[must_use]
+    pub const fn result(&self) -> i64 {
+        self.result
+    }
+
+    /// Is a success rolling result
+    #[must_use]
+    pub fn success(&self) -> Option<bool> {
+        self.checker.map(|c| c.check(self.result))
+    }
+}
 
 /// Parsed struct of a gurgle syntax command
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -92,6 +114,15 @@ impl Gurgle {
     pub fn compile(s: &str) -> Result<Self, GurgleError> {
         Self::compile_with_config(s, &config::DEFAULT_CONFIG)
     }
+
+    /// Rolling the complied dice command and get result
+    #[must_use]
+    pub fn roll(&self) -> RollResult<'_> {
+        RollResult {
+            result: nanorand::tls_rng().generate(), // fake implement for now
+            checker: self.checker.as_ref(),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -105,7 +136,7 @@ mod tests {
         assert!(Gurgle::compile("3d6max+2d10min+1").is_ok());
         assert!(Gurgle::compile("3d6max+2d10min+1>=10").is_ok());
         assert!(Gurgle::compile("3d6max+2d10min+1>=-10").is_ok());
-        assert!(Gurgle::compile("100d1000+1").is_ok());
+        assert!(Gurgle::compile("100d1000+-1").is_ok());
     }
 
     #[test]
@@ -173,5 +204,12 @@ mod tests {
             Gurgle::compile("-65537").unwrap_err(),
             GurgleError::NumberItemOutOfRange,
         );
+    }
+
+    #[test]
+    fn test_roll() {
+        let attack_dices = Gurgle::compile("3d6+2").unwrap();
+        let attack = attack_dices.roll().result();
+        println!("attack: {}", attack);
     }
 }

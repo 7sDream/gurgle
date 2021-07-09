@@ -78,4 +78,20 @@ impl Checker {
 
         Ok(Self { compare, target })
     }
+
+    /// Check if a rolling result is a success.
+    #[must_use]
+    pub fn check(&self, result: i64) -> bool {
+        match result.cmp(&self.target) {
+            std::cmp::Ordering::Greater => {
+                std::matches!(self.compare, Compare::Gte | Compare::Gt)
+            }
+            std::cmp::Ordering::Less => {
+                std::matches!(self.compare, Compare::Lte | Compare::Lt)
+            }
+            std::cmp::Ordering::Equal => {
+                std::matches!(self.compare, Compare::Gte | Compare::Lte | Compare::Eq)
+            }
+        }
+    }
 }
