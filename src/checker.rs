@@ -51,7 +51,7 @@ impl FromStr for Compare {
 ///
 /// ## Example
 ///
-/// Gurgle command `3d6 > 10`: `>` is the [`compare`] and `10` is the [`target`].
+/// Gurgle rolling command `3d6 > 10`: `>` is the [`compare`] and `10` is the [`target`].
 /// When sum of 3 dice roll result grater then 10, it's a success(pass).
 ///
 /// [`compare`]: #structfield.compare

@@ -59,7 +59,7 @@ impl<'g> RollResult<'g> {
     }
 }
 
-/// Parsed struct of a gurgle syntax command
+/// Parsed struct of a gurgle rolling command
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Gurgle {
     /// The root node of gurgle expr ast tree
