@@ -2,12 +2,15 @@
 
 use std::str::FromStr;
 
+use nanorand::Rng;
 use pest::iterators::Pair;
 
 use crate::{
     config::Config,
     error::{GurgleError, ParseEnumError},
     parser::Rule,
+    roll::{DiceRoll, RollItem, RollTree, RollTreeNode},
+    tree::{BinaryTree, BinaryTreeNode},
 };
 
 /// Post process action after a round of dice roll
@@ -86,6 +89,15 @@ impl Dice {
             pp,
         })
     }
+
+    /// Roll this dice and get result
+    #[must_use]
+    pub fn roll(&self) -> DiceRoll {
+        let points = (0..self.times)
+            .map(|_| nanorand::tls_rng().generate_range(1..=self.sided))
+            .collect();
+        DiceRoll::new(points, self.pp)
+    }
 }
 
 /// Item in gurgle expr, can be a number or a dice roll action
@@ -118,6 +130,15 @@ impl Item {
 
         Ok(result)
     }
+
+    /// Get roll result
+    #[must_use]
+    pub fn roll(&self) -> RollItem {
+        match self {
+            Self::Dice(d) => RollItem::Dice(d.roll()),
+            Self::Number(x) => RollItem::Number(*x),
+        }
+    }
 }
 
 /// Operator in gurgle expr
@@ -143,27 +164,19 @@ impl FromStr for Operator {
     }
 }
 
-/// Gurgle expr tree
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Tree {
-    /// Left tree
-    pub left: Box<TreeNode>,
-    /// operator
-    pub op: Operator,
-    /// right tree
-    pub right: Box<TreeNode>,
+/// Ast tree
+pub type AstTree = BinaryTree<Item, Operator>;
+
+impl AstTree {
+    pub fn roll(&self) -> RollTree {
+        RollTree::new(self.left.roll(), self.right.roll(), self.mid)
+    }
 }
 
-/// Node in gurgle expr tree
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum TreeNode {
-    /// A single item
-    Item(Item),
-    /// A sub expr tree
-    SubTree(Tree),
-}
+/// Ast tree node, can be a leaf or a sub tree
+pub type AstTreeNode = BinaryTreeNode<Item, Operator>;
 
-impl TreeNode {
+impl AstTreeNode {
     pub(crate) fn from_pair(pair: Pair<'_, Rule>, config: &Config) -> Result<Self, GurgleError> {
         let mut expr: Option<Self> = None;
         let mut op = None;
@@ -185,14 +198,14 @@ impl TreeNode {
                         }
                     }
                     if expr.is_none() {
-                        expr.replace(Self::Item(item));
+                        expr.replace(Self::Leaf(item));
                     } else {
                         let e = expr.take().unwrap();
-                        expr.replace(Self::SubTree(Tree {
-                            left: Box::new(e),
-                            op: op.take().unwrap(),
-                            right: Box::new(Self::Item(item)),
-                        }));
+                        expr.replace(Self::SubTree(AstTree::new(
+                            e,
+                            Self::Leaf(item),
+                            op.take().unwrap(),
+                        )));
                     }
                 }
                 Rule::operator => {
@@ -203,5 +216,12 @@ impl TreeNode {
         }
 
         Ok(expr.unwrap())
+    }
+
+    pub fn roll(&self) -> RollTreeNode {
+        match self {
+            Self::Leaf(item) => RollTreeNode::Leaf(item.roll()),
+            Self::SubTree(tree) => RollTreeNode::SubTree(tree.roll()),
+        }
     }
 }

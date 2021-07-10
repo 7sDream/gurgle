@@ -19,14 +19,16 @@ pub mod checker;
 mod config;
 pub mod error;
 mod parser;
+pub mod roll;
+mod tree;
 
 // ===== uses =====
 
-use nanorand::Rng;
 use pest::Parser;
+use roll::RollTreeNode;
 
 use crate::{
-    ast::TreeNode,
+    ast::AstTreeNode,
     checker::Checker,
     error::GurgleError,
     parser::{GurgleParser, Rule},
@@ -62,10 +64,8 @@ impl<'g> RollResult<'g> {
 /// Parsed struct of a gurgle rolling command
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Gurgle {
-    /// The root node of gurgle expr ast tree
-    pub expr: TreeNode,
-    /// The checker to check if an execution result is a success
-    pub checker: Option<Checker>,
+    expr: AstTreeNode,
+    checker: Option<Checker>,
 }
 
 impl Gurgle {
@@ -87,7 +87,7 @@ impl Gurgle {
         for pair in pairs {
             match pair.as_rule() {
                 Rule::expr => {
-                    expr.replace(TreeNode::from_pair(pair, config)?);
+                    expr.replace(AstTreeNode::from_pair(pair, config)?);
                 }
                 Rule::checker => {
                     checker.replace(Checker::from_pair(pair, config)?);
@@ -115,13 +115,22 @@ impl Gurgle {
         Self::compile_with_config(s, &config::DEFAULT_CONFIG)
     }
 
+    /// Get the gurgle expr ast tree root node for walk through
+    #[must_use]
+    pub const fn expr(&self) -> &AstTreeNode {
+        &self.expr
+    }
+
+    /// Get the gurgle expr ast tree root node for walk through
+    #[must_use]
+    pub const fn checker(&self) -> Option<&Checker> {
+        self.checker.as_ref()
+    }
+
     /// Rolling the complied dice command and get result
     #[must_use]
-    pub fn roll(&self) -> RollResult<'_> {
-        RollResult {
-            result: nanorand::tls_rng().generate(), // fake implement for now
-            checker: self.checker.as_ref(),
-        }
+    pub fn roll(&self) -> RollTreeNode {
+        self.expr.roll()
     }
 }
 
@@ -208,8 +217,8 @@ mod tests {
 
     #[test]
     fn test_roll() {
-        let attack_dices = Gurgle::compile("3d6+2").unwrap();
-        let attack = attack_dices.roll().result();
-        println!("attack: {}", attack);
+        let attack_dices = Gurgle::compile("3d6+2d2+2").unwrap();
+        let attack = attack_dices.roll();
+        println!("attack: {:?}", attack);
     }
 }
