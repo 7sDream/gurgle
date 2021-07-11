@@ -63,6 +63,24 @@ pub struct Dice {
 }
 
 impl Dice {
+    /// Create a new `n` sided dice and roll it `m` times, with default post processor [`Sum`]
+    ///
+    /// [`Sum`]: enum.PostProcessor.html#variant.Sum
+    #[must_use]
+    pub const fn new(n: u64, m: u64) -> Self {
+        Self::new_with_pp(n, m, PostProcessor::Sum)
+    }
+
+    /// Create a new `n` sided dice and roll it `m` times, with post processor `pp`
+    #[must_use]
+    pub const fn new_with_pp(n: u64, m: u64, pp: PostProcessor) -> Self {
+        Self {
+            times: n,
+            sided: m,
+            pp,
+        }
+    }
+
     #[allow(clippy::cast_sign_loss)] // because times and sided can't be negative
     fn from_pair(pair: Pair<'_, Rule>, config: &Config) -> Result<Self, GurgleError> {
         assert_eq!(pair.as_rule(), Rule::dice);
@@ -139,6 +157,36 @@ impl Item {
             Self::Number(x) => RollItem::Number(*x),
         }
     }
+
+    /// Check if this item is a number
+    #[must_use]
+    pub const fn is_number(&self) -> bool {
+        std::matches!(self, Item::Number(_))
+    }
+
+    /// Check if this item is a dice
+    #[must_use]
+    pub const fn is_dice(&self) -> bool {
+        std::matches!(self, Item::Dice(_))
+    }
+
+    /// Try treat this item as a number
+    #[must_use]
+    pub const fn as_number(&self) -> Option<i64> {
+        match self {
+            Self::Number(x) => Some(*x),
+            Self::Dice(_) => None,
+        }
+    }
+
+    /// Try treat this item as a dice
+    #[must_use]
+    pub const fn as_dice(&self) -> Option<&Dice> {
+        match self {
+            Self::Dice(dice) => Some(dice),
+            Self::Number(_) => None,
+        }
+    }
 }
 
 /// Operator in gurgle expr
@@ -201,7 +249,7 @@ impl AstTreeNode {
                         expr.replace(Self::Leaf(item));
                     } else {
                         let e = expr.take().unwrap();
-                        expr.replace(Self::SubTree(AstTree::new(
+                        expr.replace(Self::Tree(AstTree::new(
                             e,
                             Self::Leaf(item),
                             op.take().unwrap(),
@@ -221,7 +269,7 @@ impl AstTreeNode {
     pub fn roll(&self) -> RollTreeNode {
         match self {
             Self::Leaf(item) => RollTreeNode::Leaf(item.roll()),
-            Self::SubTree(tree) => RollTreeNode::SubTree(tree.roll()),
+            Self::Tree(tree) => RollTreeNode::Tree(tree.roll()),
         }
     }
 }

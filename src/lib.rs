@@ -25,18 +25,18 @@ mod tree;
 // ===== uses =====
 
 use pest::Parser;
-use roll::RollTreeNode;
 
 use crate::{
     ast::AstTreeNode,
     checker::Checker,
     error::GurgleError,
     parser::{GurgleParser, Rule},
+    roll::GurgleRoll,
 };
 
 // ===== pub uses =====
 
-pub use config::Config;
+pub use {ast::Dice, config::Config};
 
 // ===== implement =====
 
@@ -129,8 +129,8 @@ impl Gurgle {
 
     /// Rolling the complied dice command and get result
     #[must_use]
-    pub fn roll(&self) -> RollTreeNode {
-        self.expr.roll()
+    pub fn roll(&self) -> GurgleRoll<'_> {
+        GurgleRoll::new(self.expr.roll(), self.checker())
     }
 }
 
@@ -217,8 +217,10 @@ mod tests {
 
     #[test]
     fn test_roll() {
-        let attack_dices = Gurgle::compile("3d6+2d2+2").unwrap();
+        let attack_dices = Gurgle::compile("3d6+2d2+2>12").unwrap();
         let attack = attack_dices.roll();
-        println!("attack: {:?}", attack);
+        println!("attack expr: {:?}", attack.expr());
+        println!("attack = {}", attack.result());
+        println!("success = {}", attack.success().unwrap());
     }
 }
