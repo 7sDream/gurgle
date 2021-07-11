@@ -28,7 +28,7 @@ println!("roll your attack({}), result: {}", attack, result);
 
 Notice: `Display` trait for rolling result is implemented only if feature `detail`(which is enabled by default) is enabled.
 
-But you can always use `result.result()` to get rolling result value(i64), and `result.success()` to get if it's a success.
+But you can always use `result.value()` to get rolling result value(i64), and `result.success()` to get if it's a success.
 
 See [docs][doc-home] for full syntax and example.
 

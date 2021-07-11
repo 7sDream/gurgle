@@ -105,7 +105,7 @@
 pub mod checker;
 mod config;
 #[cfg(feature = "detail")]
-pub mod detail;
+mod detail;
 pub mod error;
 pub mod expr;
 mod parser;
