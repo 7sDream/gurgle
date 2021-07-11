@@ -21,3 +21,7 @@ thiserror = "1"
 version = "0.6"
 default_features = false
 features = ["std", "tls", "wyrand"]
+
+[features]
+default = ["detail"]
+detail = []

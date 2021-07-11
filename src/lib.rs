@@ -2,7 +2,7 @@
 //!
 //! ## Example
 //!
-//! Only need result value:
+//! ### Only need result value
 //!
 //! ```rust
 //! let attack = "3d6+2d4+1";
@@ -11,27 +11,43 @@
 //! // output: roll your attack(3d6+2d4+1), result: 16
 //! ```
 //!
-//! Need check if rolling result is success(pass):
+//! ### Need check if rolling result is success(pass)
 //!
 //! ```rust
 //! use gurgle::Gurgle;
 //!
 //! let attack = "3d6+2d4+1>15";
 //! let dice = Gurgle::compile(attack).unwrap();
-//! let roll = dice.roll();
+//! let result = dice.roll();
 //!
 //! println!(
 //!     "roll your attack({}), result: {}, {}",
-//!     attack, roll.result(),
-//!     if roll.success().unwrap() { "success" } else { "miss" },
+//!     attack, result.value(),
+//!     if result.success().unwrap() { "success" } else { "miss" },
 //! );
 //!
 //! // output: roll your attack(3d6+2d4+1>15), result: 16, success
 //! ```
 //!
-//! Need get rolling result of every dice:
+//! ### Need get rolling result of every dice
 //!
-//! see example: [`detail.rs`](https://github.com/7sDream/gurgle/blob/master/example/detail.rs).
+//! ```rust
+//! use gurgle::Gurgle;
+//!
+//! let attack = "3d6+2d4+1>15";
+//! let dice = Gurgle::compile(attack).unwrap();
+//! let result = dice.roll();
+//!
+//! println!("roll your attack({}), result: {}", attack, result);
+//!
+// // output: roll your attack(3d6+2d4+1>15), result: (4+3+1) + (1+3) + 1 = 15, target is >15, failed
+//! ```
+//!
+//! Notice: `Display` trait for rolling result is implemented only if
+//! feature `detail`(which is enabled by default) is enabled.
+//!
+//! You can see source code `detail.rs` for how to can walk through result tree
+//! and construct you own output message format.
 //!
 //! ## Command Syntax
 //!
@@ -88,6 +104,8 @@
 
 pub mod checker;
 mod config;
+#[cfg(feature = "detail")]
+pub mod detail;
 pub mod error;
 pub mod expr;
 mod parser;
@@ -194,7 +212,7 @@ impl Gurgle {
 /// [`Gurgle::roll`]: struct.Gurgle.html#method.roll
 /// [`Gurgle::compile`]: struct.Gurgle.html#method.compile
 pub fn roll(s: &str) -> Result<i64, CompileError> {
-    Gurgle::compile(s).map(|x| x.roll().result())
+    Gurgle::compile(s).map(|x| x.roll().value())
 }
 
 #[cfg(test)]
@@ -280,11 +298,14 @@ mod tests {
 
     #[test]
     fn test_roll() {
-        let attack_dices = Gurgle::compile("3d6+2d2+2>12").unwrap();
-        let attack = attack_dices.roll();
-        println!("attack expr: {:?}", attack.expr());
-        println!("attack = {}", attack.result());
-        assert!(attack.result() >= 4);
-        assert_eq!(attack.success().unwrap(), attack.result() > 12);
+        let attack = Gurgle::compile("3d6+2d4+1>15").unwrap();
+        let result = attack.roll();
+
+        #[cfg(feature = "detail")]
+        println!("attack rolling result is: {}", result);
+
+        println!("attack = {}", result.value());
+        assert!(result.value() >= 6);
+        assert_eq!(result.success().unwrap(), result.value() > 15);
     }
 }

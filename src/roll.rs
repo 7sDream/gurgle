@@ -83,7 +83,7 @@ impl DiceRoll {
 
     #[allow(clippy::missing_panics_doc)] // because this can't panic
     #[must_use]
-    fn real_result(&self) -> u64 {
+    fn calculate_value(&self) -> u64 {
         match self.pp {
             PostProcessor::Sum => self.points.iter().sum(),
             PostProcessor::Avg => self.points.iter().sum::<u64>() / self.points.len() as u64,
@@ -93,9 +93,9 @@ impl DiceRoll {
     }
 
     /// Get the final rolling result value, with post processor executed
-    pub fn result(&self) -> u64 {
+    pub fn value(&self) -> u64 {
         // Safety: `cache` only used in `cache_it` function
-        unsafe { cache_it(&self.cache, || self.real_result()) }
+        unsafe { cache_it(&self.cache, || self.calculate_value()) }
     }
 }
 
@@ -113,10 +113,10 @@ pub enum ItemRoll {
 impl ItemRoll {
     /// Get rolling result value
     #[must_use]
-    pub fn result(&self) -> i64 {
+    pub fn value(&self) -> i64 {
         match self {
             #[allow(clippy::cast_possible_wrap)] // because out number can't be so big
-            Self::Dice(dice) => dice.result() as i64,
+            Self::Dice(dice) => dice.value() as i64,
             Self::Number(x) => *x,
         }
     }
@@ -126,17 +126,17 @@ impl ItemRoll {
 pub type RollTree = BinaryTree<ItemRoll, Operator, AtomicPtr<i64>>;
 
 impl RollTree {
-    fn real_result(&self) -> i64 {
+    fn calculate_value(&self) -> i64 {
         match self.mid {
-            Operator::Add => self.left.result() + self.right.result(),
-            Operator::Minus => self.left.result() - self.result(),
+            Operator::Add => self.left.value() + self.right.value(),
+            Operator::Minus => self.left.value() - self.value(),
         }
     }
 
     /// Get rolling result value
-    pub fn result(&self) -> i64 {
+    pub fn value(&self) -> i64 {
         // Safety: `cache` only used in `cache_it` function
-        unsafe { cache_it(&self.extra, || self.real_result()) }
+        unsafe { cache_it(&self.extra, || self.calculate_value()) }
     }
 }
 
@@ -145,10 +145,10 @@ pub type RollTreeNode = BinaryTreeNode<ItemRoll, Operator, AtomicPtr<i64>>;
 
 impl RollTreeNode {
     /// Get rolling result value
-    pub fn result(&self) -> i64 {
+    pub fn value(&self) -> i64 {
         match self {
-            Self::Leaf(leaf) => leaf.result(),
-            Self::Tree(tree) => tree.result(),
+            Self::Leaf(leaf) => leaf.value(),
+            Self::Tree(tree) => tree.value(),
         }
     }
 }
@@ -183,15 +183,15 @@ impl<'g> GurgleRoll<'g> {
         self.checker
     }
 
-    /// Get rolling result
+    /// Get rolling result value
     #[must_use]
-    pub fn result(&self) -> i64 {
+    pub fn value(&self) -> i64 {
         // Safety: cache only used in cache_it
-        unsafe { cache_it(&self.cache, || self.result.result()) }
+        unsafe { cache_it(&self.cache, || self.result.value()) }
     }
 
     /// Check if this rolling result is success(passed)
     pub fn success(&self) -> Option<bool> {
-        self.checker.map(|c| c.check(self.result()))
+        self.checker.map(|c| c.check(self.value()))
     }
 }

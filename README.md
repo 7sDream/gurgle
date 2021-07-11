@@ -19,18 +19,18 @@ use gurgle::Gurgle;
 
 let attack = "3d6+2d4+1>15";
 let dice = Gurgle::compile(attack).unwrap();
-let roll = dice.roll();
+let result = dice.roll();
 
-println!(
-    "roll your attack({}), result: {}, {}",
-    attack, roll.result(),
-    if roll.success().unwrap() { "success" } else { "miss" },
-);
+println!("roll your attack({}), result: {}", attack, result);
 
-// output: roll your attack(3d6+2d4+1>15), result: 12, miss
+// output: roll your attack(3d6+2d4+1>15), result: (4+3+1) + (1+3) + 1 = 15, target is >15, failed
 ```
 
-See [docs][doc-home] for full syntax.
+Notice: `Display` trait for rolling result is implemented only if feature `detail`(which is enabled by default) is enabled.
+
+But you can always use `result.result()` to get rolling result value(i64), and `result.success()` to get if it's a success.
+
+See [docs][doc-home] for full syntax and example.
 
 ## License
 
