@@ -1,4 +1,4 @@
-//! Abstract syntax tree of gurgle expr
+//! gurgle expression
 
 use std::str::FromStr;
 
@@ -7,13 +7,13 @@ use pest::iterators::Pair;
 
 use crate::{
     config::Config,
-    error::{GurgleError, ParseEnumError},
+    error::{CompileError, ParseEnumError},
     parser::Rule,
-    roll::{DiceRoll, RollItem, RollTree, RollTreeNode},
+    roll::{DiceRoll, ItemRoll, RollTree, RollTreeNode},
     tree::{BinaryTree, BinaryTreeNode},
 };
 
-/// Post process action after a round of dice roll
+/// Post processing action after a round of dice roll
 ///
 /// ## Example
 ///
@@ -25,7 +25,7 @@ use crate::{
 pub enum PostProcessor {
     /// get sum of all roll, default action
     Sum,
-    /// get avg value of all roll
+    /// get avg value of all roll, will round down(floor) if not divisible
     Avg,
     /// get max value of all roll
     Max,
@@ -49,14 +49,14 @@ impl FromStr for PostProcessor {
     }
 }
 
-/// A dice roll action
+/// Rule of a round of dice roll
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Dice {
     /// roll dice how many times
     pub times: u64,
     /// side count of this dice
     pub sided: u64,
-    /// post process action after all roll, see [`PostProcessor`]
+    /// post processing action after all roll, see [`PostProcessor`]
     ///
     /// [`PostProcessor`]: enum.PostProcessor.html
     pub pp: PostProcessor,
@@ -82,20 +82,20 @@ impl Dice {
     }
 
     #[allow(clippy::cast_sign_loss)] // because times and sided can't be negative
-    fn from_pair(pair: Pair<'_, Rule>, config: &Config) -> Result<Self, GurgleError> {
+    fn from_pair(pair: Pair<'_, Rule>, config: &Config) -> Result<Self, CompileError> {
         assert_eq!(pair.as_rule(), Rule::dice);
 
         let mut pairs = pair.into_inner();
         let times = pairs.next().unwrap().as_str().parse::<i64>()?;
         let sided = pairs.next().unwrap().as_str().parse::<i64>()?;
         if times <= 0 || sided <= 0 {
-            return Err(GurgleError::DiceRollOrSidedNegative);
+            return Err(CompileError::DiceRollOrSidedNegative);
         }
         if times as u64 > config.max_roll_times {
-            return Err(GurgleError::DiceRollTimesLimitExceeded);
+            return Err(CompileError::DiceRollTimesLimitExceeded);
         }
         if sided as u64 > config.max_dice_sides {
-            return Err(GurgleError::DiceSidedCountLimitExceeded);
+            return Err(CompileError::DiceSidedCountLimitExceeded);
         }
         let pp = pairs
             .next()
@@ -108,7 +108,7 @@ impl Dice {
         })
     }
 
-    /// Roll this dice and get result
+    /// Roll a round of dice and get a result
     #[must_use]
     pub fn roll(&self) -> DiceRoll {
         let points = (0..self.times)
@@ -118,7 +118,7 @@ impl Dice {
     }
 }
 
-/// Item in gurgle expr, can be a number or a dice roll action
+/// Item in gurgle expression, can be a number or a dice
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Item {
     /// A normal number
@@ -128,17 +128,16 @@ pub enum Item {
 }
 
 impl Item {
-    fn from_pair(pair: Pair<'_, Rule>, config: &Config) -> Result<Self, GurgleError> {
+    fn from_pair(pair: Pair<'_, Rule>, config: &Config) -> Result<Self, CompileError> {
         assert_eq!(pair.as_rule(), Rule::item);
 
         let expr = pair.into_inner().next().unwrap();
 
         let result = match expr.as_rule() {
-            #[allow(clippy::cast_sign_loss)] // because x is >= 0 after check
             Rule::number => {
                 let x = expr.as_str().parse::<i64>()?;
                 if x.abs() as u64 > config.max_number_item_value {
-                    return Err(GurgleError::NumberItemOutOfRange);
+                    return Err(CompileError::NumberItemOutOfRange);
                 }
                 Self::Number(x)
             }
@@ -151,10 +150,10 @@ impl Item {
 
     /// Get roll result
     #[must_use]
-    pub fn roll(&self) -> RollItem {
+    pub fn roll(&self) -> ItemRoll {
         match self {
-            Self::Dice(d) => RollItem::Dice(d.roll()),
-            Self::Number(x) => RollItem::Number(*x),
+            Self::Dice(d) => ItemRoll::Dice(d.roll()),
+            Self::Number(x) => ItemRoll::Number(*x),
         }
     }
 
@@ -194,7 +193,7 @@ impl Item {
 pub enum Operator {
     /// add left tree result and right tree result
     Add,
-    /// minus left tree result with right tree result
+    /// subtract the right tree result from the left result
     Minus,
 }
 
@@ -212,7 +211,7 @@ impl FromStr for Operator {
     }
 }
 
-/// Ast tree
+/// Abstract syntax tree of gurgle expr
 pub type AstTree = BinaryTree<Item, Operator>;
 
 impl AstTree {
@@ -221,11 +220,11 @@ impl AstTree {
     }
 }
 
-/// Ast tree node, can be a leaf or a sub tree
+/// Abstract syntax tree node, can be a leaf or a sub tree
 pub type AstTreeNode = BinaryTreeNode<Item, Operator>;
 
 impl AstTreeNode {
-    pub(crate) fn from_pair(pair: Pair<'_, Rule>, config: &Config) -> Result<Self, GurgleError> {
+    pub(crate) fn from_pair(pair: Pair<'_, Rule>, config: &Config) -> Result<Self, CompileError> {
         let mut expr: Option<Self> = None;
         let mut op = None;
         let mut times_sum = 0;
@@ -237,12 +236,12 @@ impl AstTreeNode {
                     let item = Item::from_pair(pair, config)?;
                     item_count += 1;
                     if item_count > config.max_item_count {
-                        return Err(GurgleError::ItemCountLimitExceeded);
+                        return Err(CompileError::ItemCountLimitExceeded);
                     }
                     if let Item::Dice(Dice { times, .. }) = item {
                         times_sum += times;
                         if times_sum > config.max_roll_times {
-                            return Err(GurgleError::DiceRollTimesLimitExceeded);
+                            return Err(CompileError::DiceRollTimesLimitExceeded);
                         }
                     }
                     if expr.is_none() {

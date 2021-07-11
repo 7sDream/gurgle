@@ -1,14 +1,16 @@
-//! rolling result
+//! Rolling result
 
 use std::sync::atomic::{AtomicPtr, Ordering};
 
 use crate::{
-    ast::{Operator, PostProcessor},
     checker::Checker,
+    expr::{Operator, PostProcessor},
     tree::{BinaryTree, BinaryTreeNode},
 };
 
-fn cache_it<T, F>(cache: &AtomicPtr<T>, f: F) -> T
+// Safety:
+// 1. You should only change `cache` value by calling this method
+unsafe fn cache_it<T, F>(cache: &AtomicPtr<T>, f: F) -> T
 where
     T: Copy,
     F: FnOnce() -> T,
@@ -23,21 +25,25 @@ where
             Ordering::SeqCst,
             Ordering::SeqCst,
         ) {
+            // a success exchange, return value is a null ptr, so no need to deallocate
             Ok(_) => {}
             // Safety:
-            // 1. cache value is stored only in this method, by `Box::into_raw`, so the ptr is valid
-            Err(last) => drop(unsafe { Box::from_raw(last) }),
+            // Because of function safety requirement,
+            // cache value is stored only in this method, by `Box::into_raw`, so the ptr is valid
+            Err(p) => drop(Box::from_raw(p)),
         }
         value
     } else {
         // Safety:
-        // 1. cache value is stored only in this method, by `Box::into_raw`, so ptr is valid
-        // 2. if cache has a value, it will not be de-allocated until struct drop, so it's ok to dereference it
-        unsafe { *x }
+        // Because of function safety requirement,
+        // cache value is stored only in this method, by `Box::into_raw`, so ptr is valid.
+        // And if cache has a value, it will not change again, so gotten value is alive(until cache itself be dropped),
+        // so it's ok to dereference it.
+        *x
     }
 }
 
-/// Roll result of a gurgle [`Dice`]
+/// Rolling result of a gurgle [`Dice`]
 ///
 /// [`Dice`]: ../struct.Dice.html
 #[derive(Debug)]
@@ -56,19 +62,19 @@ impl DiceRoll {
         }
     }
 
-    /// get post processor
+    /// Get post processor
     #[must_use]
     pub const fn post_processor(&self) -> PostProcessor {
         self.pp
     }
 
-    /// get result points
+    /// Get rolling dice output points
     #[must_use]
     pub fn points(&self) -> &[u64] {
         &self.points
     }
 
-    /// get result points count
+    /// Get points count(rolling dice times)
     #[allow(clippy::len_without_is_empty)] // because it can't be empty
     #[must_use]
     pub fn len(&self) -> usize {
@@ -86,25 +92,26 @@ impl DiceRoll {
         }
     }
 
-    /// get the result, after post processor
+    /// Get the final rolling result value, with post processor executed
     pub fn result(&self) -> u64 {
-        cache_it(&self.cache, || self.real_result())
+        // Safety: `cache` only used in `cache_it` function
+        unsafe { cache_it(&self.cache, || self.real_result()) }
     }
 }
 
-/// Roll result of a gurgle expr tree [`Item`]
+/// Rolling result of a gurgle expression tree [`Item`]
 ///
 /// [`Item`]: ../ast/enum.Item.html
 #[derive(Debug)]
-pub enum RollItem {
-    /// A dice item roll result
+pub enum ItemRoll {
+    /// rolling result of a dice item
     Dice(DiceRoll),
-    /// A const number item
+    /// number item, rolling result is itself
     Number(i64),
 }
 
-impl RollItem {
-    /// Get roll item result value
+impl ItemRoll {
+    /// Get rolling result value
     #[must_use]
     pub fn result(&self) -> i64 {
         match self {
@@ -116,7 +123,7 @@ impl RollItem {
 }
 
 /// Rolling result tree
-pub type RollTree = BinaryTree<RollItem, Operator, AtomicPtr<i64>>;
+pub type RollTree = BinaryTree<ItemRoll, Operator, AtomicPtr<i64>>;
 
 impl RollTree {
     fn real_result(&self) -> i64 {
@@ -126,16 +133,18 @@ impl RollTree {
         }
     }
 
-    /// Get roll result
+    /// Get rolling result value
     pub fn result(&self) -> i64 {
-        cache_it(&self.extra, || self.real_result())
+        // Safety: `cache` only used in `cache_it` function
+        unsafe { cache_it(&self.extra, || self.real_result()) }
     }
 }
 
-/// Rolling result tree item
-pub type RollTreeNode = BinaryTreeNode<RollItem, Operator, AtomicPtr<i64>>;
+/// Rolling result tree node, can be a leaf or a sub tree
+pub type RollTreeNode = BinaryTreeNode<ItemRoll, Operator, AtomicPtr<i64>>;
 
 impl RollTreeNode {
+    /// Get rolling result value
     pub fn result(&self) -> i64 {
         match self {
             Self::Leaf(leaf) => leaf.result(),
@@ -144,7 +153,9 @@ impl RollTreeNode {
     }
 }
 
-/// Gurgle roll result
+/// Rolling result of [`Gurgle`] command
+///
+/// [`Gurgle`]: ../struct.Gurgle.html
 #[derive(Debug)]
 pub struct GurgleRoll<'g> {
     result: RollTreeNode,
@@ -161,19 +172,25 @@ impl<'g> GurgleRoll<'g> {
         }
     }
 
-    /// Get result expr
+    /// Get rolling result expression
     #[must_use]
     pub const fn expr(&self) -> &RollTreeNode {
         &self.result
     }
 
-    /// Get result
-    #[must_use]
-    pub fn result(&self) -> i64 {
-        cache_it(&self.cache, || self.result.result())
+    /// Get the checker
+    pub const fn checker(&self) -> Option<&'g Checker> {
+        self.checker
     }
 
-    /// Check if this result is a success(passed) roll
+    /// Get rolling result
+    #[must_use]
+    pub fn result(&self) -> i64 {
+        // Safety: cache only used in cache_it
+        unsafe { cache_it(&self.cache, || self.result.result()) }
+    }
+
+    /// Check if this rolling result is success(passed)
     pub fn success(&self) -> Option<bool> {
         self.checker.map(|c| c.check(self.result()))
     }

@@ -6,7 +6,7 @@ use pest::iterators::Pair;
 
 use crate::{
     config::Config,
-    error::{GurgleError, ParseEnumError},
+    error::{CompileError, ParseEnumError},
     parser::Rule,
 };
 
@@ -36,7 +36,7 @@ impl FromStr for Compare {
             ">" => Self::Gt,
             "<=" => Self::Lte,
             "<" => Self::Lt,
-            "=" | "==" => Self::Eq,
+            "=" => Self::Eq,
             _ => return Err(ParseEnumError),
         };
 
@@ -44,15 +44,15 @@ impl FromStr for Compare {
     }
 }
 
-/// Check if the result of the gurgle execution is passed
+/// Check if the result of rolling dice is a success(pass)
 ///
-/// `Checker` compare gurgle execution result to [`target`].
+/// `Checker` will compare gurgle execution result to [`target`].
 /// It's a success(pass) if compare result is as same as [`compare`] field.
 ///
 /// ## Example
 ///
-/// Gurgle rolling command `3d6 > 10`: `>` is the [`compare`] and `10` is the [`target`].
-/// When sum of 3 dice roll result grater then 10, it's a success(pass).
+/// In gurgle command `3d6 > 10`: `>` is the [`compare`] and `10` is the [`target`].
+/// When sum of 3 dice result grater then 10, it's a success(pass).
 ///
 /// [`compare`]: #structfield.compare
 /// [`target`]: #structfield.target
@@ -65,7 +65,7 @@ pub struct Checker {
 }
 
 impl Checker {
-    pub(crate) fn from_pair(pair: Pair<'_, Rule>, config: &Config) -> Result<Self, GurgleError> {
+    pub(crate) fn from_pair(pair: Pair<'_, Rule>, config: &Config) -> Result<Self, CompileError> {
         assert_eq!(pair.as_rule(), Rule::checker);
 
         let mut pairs = pair.into_inner();
@@ -73,7 +73,7 @@ impl Checker {
         let target = pairs.next().unwrap().as_str().parse::<i64>()?;
 
         if target.abs() as u64 > config.max_number_item_value {
-            return Err(GurgleError::NumberItemOutOfRange);
+            return Err(CompileError::NumberItemOutOfRange);
         }
 
         Ok(Self { compare, target })

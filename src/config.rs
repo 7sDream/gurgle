@@ -1,13 +1,13 @@
 pub static DEFAULT_CONFIG: Config = Config::default();
 
-/// Gurgle limitation configuration
+/// Gurgle command limitation configuration
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Config {
-    /// How many items can a gurgle expr contains
+    /// How many items can a gurgle expression contains
     pub max_item_count: u64,
-    /// How many sides a dice can have
+    /// How many sided a dice can have
     pub max_dice_sides: u64,
-    /// How many roll times can a expr contains
+    /// How many roll times(sum of all dice roll time) can a expression contains
     pub max_roll_times: u64,
     /// Max value of a number item
     pub max_number_item_value: u64,
@@ -65,7 +65,7 @@ impl Config {
 
     /// Give a new config, which only changes max number item value with provided value.
     #[must_use]
-    pub const fn max_number_item(self, c: u64) -> Self {
+    pub const fn max_number_item_value(self, c: u64) -> Self {
         Self {
             max_number_item_value: c,
             ..self

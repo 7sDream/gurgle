@@ -1,9 +1,9 @@
-/// Gurgle expr tree
+/// Common binary tree structure
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct BinaryTree<T, Mid = (), Extra = ()> {
     /// Left tree
     pub left: Box<BinaryTreeNode<T, Mid, Extra>>,
-    /// operator
+    /// middle value
     pub mid: Mid,
     /// right tree
     pub right: Box<BinaryTreeNode<T, Mid, Extra>>,
@@ -15,6 +15,7 @@ impl<T, Mid, Extra> BinaryTree<T, Mid, Extra>
 where
     Extra: Default,
 {
+    /// Create a new tree from left/right sub tree and middle(new root) value
     pub fn new(
         left: BinaryTreeNode<T, Mid, Extra>, right: BinaryTreeNode<T, Mid, Extra>, mid: Mid,
     ) -> Self {
@@ -27,10 +28,10 @@ where
     }
 }
 
-/// Node in gurgle expr tree
+/// Node in the binary tree
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum BinaryTreeNode<T, Mid = (), Extra = ()> {
-    /// A single leaf item
+    /// A leaf node
     Leaf(T),
     /// A (sub) tree
     Tree(BinaryTree<T, Mid, Extra>),
@@ -49,7 +50,7 @@ impl<T, Mid, Extra> BinaryTreeNode<T, Mid, Extra> {
         std::matches!(self, Self::Tree(_))
     }
 
-    /// Try treat this node as a leaf node and leaf value
+    /// Try treat this node as a leaf node and get leaf value
     #[must_use]
     pub const fn as_leaf(&self) -> Option<&T> {
         match self {

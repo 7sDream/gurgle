@@ -1,16 +1,16 @@
-//! Errors when parse gurgle command
+//! Errors in gurgle command parsing and execution
 
 use std::num::ParseIntError;
 
 use thiserror::Error;
 
-/// Can't parse string to any variant of target enum.
+/// Can't parse string to any variant of target enum
 #[derive(Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ParseEnumError;
 
-/// Parse string to as a gurgle command failed
+/// Compile string to a gurgle command failed
 #[derive(Debug, Error, Clone, PartialEq, Eq)]
-pub enum GurgleError {
+pub enum CompileError {
     /// Invalid syntax
     #[error("invalid gurgle syntax: {0}")]
     InvalidSyntax(String),
@@ -26,7 +26,7 @@ pub enum GurgleError {
     /// Dice have too many sides
     #[error("dice sides count limit exceeded")]
     DiceSidedCountLimitExceeded,
-    /// Too many items in expr
+    /// Too many items in expression
     #[error("items count limit exceeded")]
     ItemCountLimitExceeded,
     /// Number item out of range
@@ -34,7 +34,7 @@ pub enum GurgleError {
     NumberItemOutOfRange,
 }
 
-impl<R: pest::RuleType> From<pest::error::Error<R>> for GurgleError {
+impl<R: pest::RuleType> From<pest::error::Error<R>> for CompileError {
     fn from(err: pest::error::Error<R>) -> Self {
         Self::InvalidSyntax(format!("{}", err))
     }
