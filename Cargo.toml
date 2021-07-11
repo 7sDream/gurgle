@@ -10,7 +10,7 @@ homepage = "https://github.com/7sDream/gurgle"
 repository = "https://github.com/7sDream/gurgle"
 license = "BSD-3-Clause-Clear"
 keywords = ["dice", "roll", "trpg", "random"]
-categories = ["game-development", "game", "parser-implementations", "simulation"]
+categories = ["game-development", "games", "parser-implementations", "simulation"]
 
 [dependencies]
 pest = "2.0"
