@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- avg post processor missing result in detail output
+- sum post processor have redundancy result in detail output
+
 ## [0.2.0] - 2021-07-12
 
 ### Added
