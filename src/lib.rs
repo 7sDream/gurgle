@@ -40,7 +40,7 @@
 //!
 //! println!("roll your attack({}), result: {}", attack, result);
 //!
-// // output: roll your attack(3d6+2d4+1>15), result: (4+3+1) + (1+3) + 1 = 15, target is >15, failed
+//! // output: roll your attack(3d6+2d4+1>15), result: (4+3+1) + (1+3) + 1 = 15, target is >15, failed
 //! ```
 //!
 //! Notice: `Display` trait for rolling result is implemented only if
