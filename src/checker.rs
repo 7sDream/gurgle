@@ -1,4 +1,4 @@
-//! Check whether a roll result is a success
+//! check whether a roll result is a success
 
 use std::str::FromStr;
 

@@ -1,4 +1,4 @@
-//! Errors in gurgle command parsing and execution
+//! errors in gurgle command parsing and execution
 
 use std::num::ParseIntError;
 

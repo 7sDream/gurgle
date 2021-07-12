@@ -107,7 +107,7 @@
 pub mod checker;
 mod config;
 #[cfg(feature = "detail")]
-mod detail;
+pub mod detail;
 pub mod error;
 pub mod expr;
 mod parser;
@@ -305,6 +305,13 @@ mod tests {
 
     #[test]
     fn test_roll() {
+        // detail::Language::set_global(detail::Language::ZhCN);
+        // detail::Language::set_global_custom(detail::OutputSpans {
+        //     comma: "| ".into(),
+        //     target_is: "we want".into(),
+        //     success: "passed".into(),
+        //     failed: "over".into(),
+        // });
         let attack = Gurgle::compile("3d6min+3d6avg+3d6max+3d6+(2d4+1)*2+1>15").unwrap();
         let result = attack.roll();
 

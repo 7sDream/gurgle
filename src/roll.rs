@@ -1,4 +1,4 @@
-//! Rolling result
+//! rolling result
 
 use std::sync::atomic::{AtomicPtr, Ordering};
 
