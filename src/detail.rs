@@ -23,20 +23,25 @@ impl Display for Checker {
 
 impl Display for DiceRoll {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let (prefix, mid) = match self.post_processor() {
-            PostProcessor::Sum => ("", "+"),
-            PostProcessor::Avg => ("Avg", ", "),
-            PostProcessor::Max => ("Max", ", "),
-            PostProcessor::Min => ("Min", ", "),
+        let (prefix, mid, postfix) = match self.post_processor() {
+            PostProcessor::Sum => ("", "+", ""),
+            PostProcessor::Avg => ("Avg[", ",", "]"),
+            PostProcessor::Max => ("Max[", ",", "]"),
+            PostProcessor::Min => ("Min[", ",", "]"),
         };
-        f.write_str(prefix)?;
+
         f.write_char('(')?;
+        f.write_str(prefix)?;
         let last = self.len() - 1;
         for (i, value) in self.points().iter().enumerate() {
             f.write_fmt(format_args!("{}", value))?;
             if i != last {
                 f.write_str(mid)?;
             }
+        }
+        f.write_str(postfix)?;
+        if self.post_processor() != PostProcessor::Avg {
+            f.write_fmt(format_args!("={}", self.value()))?
         }
         f.write_char(')')
     }
@@ -47,6 +52,7 @@ impl Display for ItemRoll {
         match self {
             Self::Number(x) => f.write_fmt(format_args!("{}", x)),
             Self::Dice(dice) => f.write_fmt(format_args!("{}", dice)),
+            Self::Parentheses(e) => f.write_fmt(format_args!("({})", e.as_ref())),
         }
     }
 }
@@ -56,6 +62,7 @@ impl Display for RollTree {
         let op = match self.mid {
             Operator::Add => "+",
             Operator::Minus => "-",
+            Operator::Multiply => "*",
         };
         f.write_fmt(format_args!("{} {} {}", self.left, op, self.right))
     }

@@ -3,10 +3,21 @@
 use std::str::FromStr;
 
 use nanorand::Rng;
-use pest::iterators::Pair;
+use once_cell::sync::Lazy;
+use pest::{
+    iterators::Pair,
+    prec_climber::{Assoc, Operator as PCOperator, PrecClimber},
+};
+
+static CLIMBER: Lazy<PrecClimber<Rule>> = Lazy::new(|| {
+    PrecClimber::new(vec![
+        PCOperator::new(Rule::op_add, Assoc::Left) | PCOperator::new(Rule::op_sub, Assoc::Left),
+        PCOperator::new(Rule::op_multiply, Assoc::Left),
+    ])
+});
 
 use crate::{
-    config::Config,
+    config::Limit,
     error::{CompileError, ParseEnumError},
     parser::Rule,
     roll::{DiceRoll, ItemRoll, RollTree, RollTreeNode},
@@ -81,22 +92,19 @@ impl Dice {
         }
     }
 
-    #[allow(clippy::cast_sign_loss)] // because times and sided can't be negative
-    fn from_pair(pair: Pair<'_, Rule>, config: &Config) -> Result<Self, CompileError> {
+    #[allow(clippy::cast_sign_loss)] // because times and sided can't be negative after check_dice
+    fn from_pair(pair: Pair<'_, Rule>, limit: &mut Limit<'_>) -> Result<Self, CompileError> {
         assert_eq!(pair.as_rule(), Rule::dice);
+
+        limit.inc_item_count()?;
 
         let mut pairs = pair.into_inner();
         let times = pairs.next().unwrap().as_str().parse::<i64>()?;
         let sided = pairs.next().unwrap().as_str().parse::<i64>()?;
-        if times <= 0 || sided <= 0 {
-            return Err(CompileError::DiceRollOrSidedNegative);
-        }
-        if times as u64 > config.max_roll_times {
-            return Err(CompileError::DiceRollTimesLimitExceeded);
-        }
-        if sided as u64 > config.max_dice_sides {
-            return Err(CompileError::DiceSidedCountLimitExceeded);
-        }
+
+        limit.check_dice(times, sided)?;
+        limit.inc_roll_times(times as u64)?;
+
         let pp = pairs
             .next()
             .map_or(PostProcessor::Sum, |s| s.as_str().parse().unwrap());
@@ -125,23 +133,28 @@ pub enum Item {
     Number(i64),
     /// A dice
     Dice(Dice),
+    /// Another expr wrapped by parentheses
+    Parentheses(Box<AstTreeNode>),
 }
 
 impl Item {
-    fn from_pair(pair: Pair<'_, Rule>, config: &Config) -> Result<Self, CompileError> {
+    fn from_pair(pair: Pair<'_, Rule>, limit: &mut Limit<'_>) -> Result<Self, CompileError> {
         assert_eq!(pair.as_rule(), Rule::item);
 
         let expr = pair.into_inner().next().unwrap();
 
         let result = match expr.as_rule() {
             Rule::number => {
+                limit.inc_item_count()?;
                 let x = expr.as_str().parse::<i64>()?;
-                if x.abs() as u64 > config.max_number_item_value {
-                    return Err(CompileError::NumberItemOutOfRange);
-                }
+                limit.check_number_item(x)?;
                 Self::Number(x)
             }
-            Rule::dice => Self::Dice(Dice::from_pair(expr, config)?),
+            Rule::dice => Self::Dice(Dice::from_pair(expr, limit)?),
+            Rule::parentheses => Self::Parentheses(Box::new(AstTreeNode::from_pair(
+                expr.into_inner().next().unwrap(),
+                limit,
+            )?)),
             _ => unreachable!(),
         };
 
@@ -154,6 +167,7 @@ impl Item {
         match self {
             Self::Dice(d) => ItemRoll::Dice(d.roll()),
             Self::Number(x) => ItemRoll::Number(*x),
+            Self::Parentheses(e) => ItemRoll::Parentheses(Box::new(e.roll())),
         }
     }
 
@@ -169,12 +183,18 @@ impl Item {
         std::matches!(self, Item::Dice(_))
     }
 
+    /// Check if this item is a expr
+    #[must_use]
+    pub const fn is_expr(&self) -> bool {
+        std::matches!(self, Item::Parentheses(_))
+    }
+
     /// Try treat this item as a number
     #[must_use]
     pub const fn as_number(&self) -> Option<i64> {
         match self {
             Self::Number(x) => Some(*x),
-            Self::Dice(_) => None,
+            _ => None,
         }
     }
 
@@ -183,7 +203,16 @@ impl Item {
     pub const fn as_dice(&self) -> Option<&Dice> {
         match self {
             Self::Dice(dice) => Some(dice),
-            Self::Number(_) => None,
+            _ => None,
+        }
+    }
+
+    /// Try treat this item as a dice
+    #[must_use]
+    pub const fn as_expr(&self) -> Option<&AstTreeNode> {
+        match self {
+            Self::Parentheses(e) => Some(e),
+            _ => None,
         }
     }
 }
@@ -195,6 +224,8 @@ pub enum Operator {
     Add,
     /// subtract the right tree result from the left result
     Minus,
+    /// multiply left tree result with right tree result
+    Multiply,
 }
 
 impl FromStr for Operator {
@@ -204,6 +235,7 @@ impl FromStr for Operator {
         let op = match s {
             "+" => Self::Add,
             "-" => Self::Minus,
+            "x" | "*" => Self::Multiply,
             _ => return Err(ParseEnumError),
         };
 
@@ -224,45 +256,25 @@ impl AstTree {
 pub type AstTreeNode = BinaryTreeNode<Item, Operator>;
 
 impl AstTreeNode {
-    pub(crate) fn from_pair(pair: Pair<'_, Rule>, config: &Config) -> Result<Self, CompileError> {
-        let mut expr: Option<Self> = None;
-        let mut op = None;
-        let mut times_sum = 0;
-        let mut item_count = 0;
+    pub(crate) fn from_pair(
+        pair: Pair<'_, Rule>, limit: &mut Limit<'_>,
+    ) -> Result<Self, CompileError> {
+        let pairs = pair.into_inner();
 
-        for pair in pair.into_inner() {
-            match pair.as_rule() {
-                Rule::item => {
-                    let item = Item::from_pair(pair, config)?;
-                    item_count += 1;
-                    if item_count > config.max_item_count {
-                        return Err(CompileError::ItemCountLimitExceeded);
-                    }
-                    if let Item::Dice(Dice { times, .. }) = item {
-                        times_sum += times;
-                        if times_sum > config.max_roll_times {
-                            return Err(CompileError::DiceRollTimesLimitExceeded);
-                        }
-                    }
-                    if expr.is_none() {
-                        expr.replace(Self::Leaf(item));
-                    } else {
-                        let e = expr.take().unwrap();
-                        expr.replace(Self::Tree(AstTree::new(
-                            e,
-                            Self::Leaf(item),
-                            op.take().unwrap(),
-                        )));
-                    }
-                }
-                Rule::operator => {
-                    op.replace(Operator::from_str(pair.as_str()).unwrap());
-                }
-                _ => {}
-            }
-        }
-
-        Ok(expr.unwrap())
+        CLIMBER.climb(
+            pairs,
+            |p| {
+                let item = Item::from_pair(p, limit)?;
+                Ok(Self::Leaf(item))
+            },
+            |left, op, right| {
+                Ok(Self::Tree(AstTree::new(
+                    left?,
+                    right?,
+                    Operator::from_str(op.as_str()).unwrap(),
+                )))
+            },
+        )
     }
 
     pub fn roll(&self) -> RollTreeNode {

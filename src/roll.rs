@@ -108,6 +108,8 @@ pub enum ItemRoll {
     Dice(DiceRoll),
     /// number item, rolling result is itself
     Number(i64),
+    /// rolling result of another sub expr, which is commonly wrapped by parentheses
+    Parentheses(Box<RollTreeNode>),
 }
 
 impl ItemRoll {
@@ -118,6 +120,7 @@ impl ItemRoll {
             #[allow(clippy::cast_possible_wrap)] // because out number can't be so big
             Self::Dice(dice) => dice.value() as i64,
             Self::Number(x) => *x,
+            Self::Parentheses(e) => e.value(),
         }
     }
 }
@@ -129,7 +132,8 @@ impl RollTree {
     fn calculate_value(&self) -> i64 {
         match self.mid {
             Operator::Add => self.left.value() + self.right.value(),
-            Operator::Minus => self.left.value() - self.value(),
+            Operator::Minus => self.left.value() - self.right.value(),
+            Operator::Multiply => self.left.value() * self.right.value(),
         }
     }
 

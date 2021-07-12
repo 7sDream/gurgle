@@ -13,9 +13,10 @@ keywords = ["dice", "roll", "trpg", "random"]
 categories = ["game-development", "games", "parser-implementations", "simulation"]
 
 [dependencies]
-pest = "2.0"
-pest_derive = "2.0"
+pest = "2"
+pest_derive = "2"
 thiserror = "1"
+once_cell = "1"
 
 [dependencies.nanorand]
 version = "0.6"

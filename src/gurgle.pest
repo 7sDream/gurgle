@@ -7,8 +7,13 @@ dice = ${ number ~ ( "d" | "D" ) ~ number ~ postprocess? }
 compare = { ">=" | "<=" | ">" | "<" | "=" }
 checker = { compare ~ number }
 
-operator = { "+" | "-" }
-item = { dice | number }
+op_add = { "+" }
+op_sub = { "-" }
+op_multiply = { "*" | "x" }
+operator = _{ op_multiply | op_add | op_sub }
 
+parentheses = { "(" ~ expr ~ ")" }
+item = { parentheses | dice | number }
 expr = { item ~ ( operator ~ item )* }
+
 command = _{ SOI ~ expr ~ checker? ~ EOI }

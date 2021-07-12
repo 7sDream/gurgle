@@ -70,6 +70,8 @@
 //! - ❌️ `3d6 max`, space can't appear in inner of a item
 //! - ❌️ `0d-10`, `x` and `y` can't be zero or negative value
 //! - ✅️ `2d10-3d2-1`, minus ok
+//! - ✅️ `2d10*3+4`, multiply ok
+//! - ✅️ `(2d6+1)*4+1`, parentheses ok
 //!
 //! And you can add checker, it a compare with a value, that is, right side of a (in)equation:
 //!
@@ -79,11 +81,11 @@
 //! - `<10`
 //! - `=10`
 //!
-//! A full example: `3d6+2d4+1 > 10`.
+//! A full example: `3d6+(2d4+1)*2+1 > 20`.
 //!
 //! space between expr and checker, between compare and value is optional.
 //!
-//! So it's the same as: `3d6+2d4+1>10`.
+//! So it's the same as: `3d6+(2d4+1)*2+1>20`.
 //!
 //! [`AstTreeNode`]: expr/type.AstTreeNode.html
 //! [`Checker`]: checker/struct.Checker.html
@@ -114,6 +116,7 @@ mod tree;
 
 // ===== uses =====
 
+use config::Limit;
 use pest::Parser;
 
 use crate::{
@@ -145,6 +148,7 @@ impl Gurgle {
     /// When parse failed(invalid gurgle syntax, etc) or exceeded the limit defined in `config`.
     #[allow(clippy::missing_panics_doc)] // because unreachable branch is indeed unreachable
     pub fn compile_with_config(s: &str, config: &Config) -> Result<Self, CompileError> {
+        let mut limit = Limit::new(config);
         let pairs = GurgleCommandParser::parse(Rule::command, s)?;
 
         let mut expr = None;
@@ -153,10 +157,10 @@ impl Gurgle {
         for pair in pairs {
             match pair.as_rule() {
                 Rule::expr => {
-                    expr.replace(AstTreeNode::from_pair(pair, config)?);
+                    expr.replace(AstTreeNode::from_pair(pair, &mut limit)?);
                 }
                 Rule::checker => {
-                    checker.replace(Checker::from_pair(pair, config)?);
+                    checker.replace(Checker::from_pair(pair, &limit)?);
                 }
                 Rule::EOI => {}
                 _ => unreachable!(),
@@ -227,6 +231,9 @@ mod tests {
         assert!(Gurgle::compile("3d6max+2d10min+1>=10").is_ok());
         assert!(Gurgle::compile("3d6max+2d10min+1>=-10").is_ok());
         assert!(Gurgle::compile("100d1000+-1").is_ok());
+        assert!(Gurgle::compile("100d1000*5").is_ok());
+        assert!(Gurgle::compile("10d1000x1d10").is_ok());
+        assert!(Gurgle::compile("(10d1000)+(1)").is_ok());
     }
 
     #[test]
@@ -240,16 +247,16 @@ mod tests {
             CompileError::InvalidSyntax(_)
         ));
         assert!(std::matches!(
-            Gurgle::compile("1d6x1").unwrap_err(),
-            CompileError::InvalidSyntax(_)
-        ));
-        assert!(std::matches!(
             Gurgle::compile("3d6+2p10+1").unwrap_err(),
             CompileError::InvalidSyntax(_)
         ));
         assert!(std::matches!(
             Gurgle::compile("3d6max+2d10min+1avg").unwrap_err(),
             CompileError::InvalidSyntax(_)
+        ));
+        assert!(std::matches!(
+            Gurgle::compile("3d6+(1").unwrap_err(),
+            CompileError::InvalidSyntax(_),
         ));
         assert!(std::matches!(
             Gurgle::compile("3d6+100000000000000000000000000").unwrap_err(),
@@ -298,7 +305,7 @@ mod tests {
 
     #[test]
     fn test_roll() {
-        let attack = Gurgle::compile("3d6+2d4+1>15").unwrap();
+        let attack = Gurgle::compile("3d6max+(2d4+1)*2+1>12").unwrap();
         let result = attack.roll();
 
         #[cfg(feature = "detail")]
@@ -306,6 +313,6 @@ mod tests {
 
         println!("attack = {}", result.value());
         assert!(result.value() >= 6);
-        assert_eq!(result.success().unwrap(), result.value() > 15);
+        assert_eq!(result.success().unwrap(), result.value() > 12);
     }
 }

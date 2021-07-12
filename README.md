@@ -30,7 +30,7 @@ Notice: `Display` trait for rolling result is implemented only if feature `detai
 
 But you can always use `result.value()` to get rolling result value(i64), and `result.success()` to get if it's a success.
 
-See [docs][doc-home] for full syntax and example.
+Gurgle also support multiply and parentheses, see [docs][doc-home] for full syntax and example.
 
 ## License
 
