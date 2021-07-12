@@ -1,6 +1,6 @@
 [package]
 name = "gurgle"
-version = "0.3.0"
+version = "0.4.0"
 authors = ["7sDream <i@7sdre.am>"]
 edition = "2018"
 description = "Yet another dice rolling crate"
