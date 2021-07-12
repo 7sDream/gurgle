@@ -305,14 +305,14 @@ mod tests {
 
     #[test]
     fn test_roll() {
-        let attack = Gurgle::compile("3d6max+(2d4+1)*2+1>12").unwrap();
+        let attack = Gurgle::compile("3d6min+3d6avg+3d6max+3d6+(2d4+1)*2+1>15").unwrap();
         let result = attack.roll();
 
         #[cfg(feature = "detail")]
         println!("attack rolling result is: {}", result);
 
         println!("attack = {}", result.value());
-        assert!(result.value() >= 6);
-        assert_eq!(result.success().unwrap(), result.value() > 12);
+        assert!(result.value() >= 13);
+        assert_eq!(result.success().unwrap(), result.value() > 15);
     }
 }
