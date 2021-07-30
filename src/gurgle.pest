@@ -1,4 +1,4 @@
-WHITE_SPACE = _{ " " | "\t" }
+WHITESPACE = _{ " " | "\t" }
 
 number = @{ "-"? ~ ASCII_DIGIT+ }
 postprocess = { "avg" | "max" | "min" | "sum" }

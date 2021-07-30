@@ -234,6 +234,10 @@ mod tests {
         assert!(Gurgle::compile("100d1000*5").is_ok());
         assert!(Gurgle::compile("10d1000x1d10").is_ok());
         assert!(Gurgle::compile("(10d1000)+(1)").is_ok());
+        assert!(Gurgle::compile("3d6 + (2d4 + 1) * 2 + 1>20").is_ok());
+        assert!(Gurgle::compile("3d6+(2d4+1)*2+1 >20").is_ok());
+        assert!(Gurgle::compile("3d6+(2d4+1)*2+1> 20").is_ok());
+        assert!(Gurgle::compile("3d6+(2d4+1)*2+1 > 20").is_ok());
     }
 
     #[test]
@@ -257,6 +261,10 @@ mod tests {
         assert!(std::matches!(
             Gurgle::compile("3d6+(1").unwrap_err(),
             CompileError::InvalidSyntax(_),
+        ));
+        assert!(std::matches!(
+            Gurgle::compile("3d6 max+2d10min+1avg").unwrap_err(),
+            CompileError::InvalidSyntax(_)
         ));
         assert!(std::matches!(
             Gurgle::compile("3d6+100000000000000000000000000").unwrap_err(),
