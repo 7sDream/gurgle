@@ -171,7 +171,7 @@ impl Display for DiceRoll {
         }
         f.write_str(postfix)?;
         if self.post_processor() != PostProcessor::Sum {
-            f.write_fmt(format_args!("={}", self.value()))?
+            f.write_fmt(format_args!("={}", self.value()))?;
         }
         f.write_char(')')
     }
